@@ -4,9 +4,10 @@
 // memory store is for local development and tests.
 //
 // A store has: get(key) -> {body, contentType, lastModified} | null,
-// exists(key), put(key, body, contentType), and touch(key, contentType),
-// which resets the last-modified time. The bucket's expiry rule counts from
-// last-modified, so touching an image when it's served keeps it alive.
+// exists(key), put(key, body, contentType), touch(key, contentType), which
+// resets the last-modified time, list(prefix) -> [{key, lastModified}], and
+// delete(key). The bucket's expiry rule counts from last-modified, so
+// touching an object when it's used keeps it alive.
 
 import {
   S3Client,
@@ -14,6 +15,8 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   CopyObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 
 const isNotFound = err =>
@@ -64,6 +67,23 @@ export const createS3Store = ({ bucket, client = new S3Client({}) }) => ({
       })
     );
   },
+
+  async list(prefix) {
+    const found = [];
+    let ContinuationToken;
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken })
+      );
+      for (const o of res.Contents || []) found.push({ key: o.Key, lastModified: o.LastModified });
+      ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (ContinuationToken);
+    return found;
+  },
+
+  async delete(key) {
+    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  },
 });
 
 export const createMemoryStore = ({ now = () => Date.now() } = {}) => {
@@ -82,6 +102,14 @@ export const createMemoryStore = ({ now = () => Date.now() } = {}) => {
     async touch(key) {
       const object = objects.get(key);
       if (object) object.lastModified = new Date(now());
+    },
+    async list(prefix) {
+      return [...objects.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, o]) => ({ key, lastModified: o.lastModified }));
+    },
+    async delete(key) {
+      objects.delete(key);
     },
   };
 };

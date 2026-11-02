@@ -8,10 +8,17 @@
 //                      with AWS_ENDPOINT_URL_S3, AWS_REGION, AWS_ACCESS_KEY_ID and
 //                      AWS_SECRET_ACCESS_KEY, which the AWS SDK reads itself.
 //                      Without it, images are kept in memory (local development).
+//   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET - a GitHub OAuth app, for signing in
+//                      to get an API key (see README)
+//   SILLY_SESSION_SECRET - signs session cookies; a long random string
+//                      Without all three, sign-in is off and keys are by request.
 
 import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { createS3Store, createMemoryStore } from './store.js';
+import { createKeys } from './keys.js';
+import { createAuth } from './auth.js';
+import { createRateLimit } from './ratelimit.js';
 import { createAwyiss } from './generators/awyiss.js';
 import { createOrly } from './generators/orly.js';
 import { createMustache } from './generators/mustache.js';
@@ -30,17 +37,32 @@ const publicUrl = process.env.SILLY_PUBLIC_URL || `http://localhost:${port}`;
 const bucket = process.env.BUCKET_NAME;
 if (!bucket) console.warn('BUCKET_NAME is not set; storing images in memory.');
 
+const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, SILLY_SESSION_SECRET } = process.env;
+const signIn = Boolean(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && SILLY_SESSION_SECRET);
+if (!signIn) console.warn('GitHub sign-in is not configured; keys are by request only.');
+
+const store = bucket ? createS3Store({ bucket }) : createMemoryStore();
 const app = createApp({
-  store: bucket ? createS3Store({ bucket }) : createMemoryStore(),
+  store,
   generators: { awyiss: createAwyiss(), orly: createOrly(), mustache: createMustache() },
   apiKeys,
   publicUrl,
+  keys: createKeys({ store }),
+  auth: signIn
+    ? createAuth({
+        clientId: GITHUB_CLIENT_ID,
+        clientSecret: GITHUB_CLIENT_SECRET,
+        secret: SILLY_SESSION_SECRET,
+        publicUrl,
+      })
+    : null,
+  rateLimit: createRateLimit(),
 });
 
 const server = createServer(app);
 server.listen(port, () => {
   console.log(
-    JSON.stringify({ msg: 'listening', port, publicUrl, store: bucket ? 's3' : 'memory' })
+    JSON.stringify({ msg: 'listening', port, publicUrl, store: bucket ? 's3' : 'memory', signIn })
   );
 });
 

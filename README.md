@@ -4,6 +4,21 @@ Silly image generators for chat bots and anything else that can post a link, sta
 
 A client asks silly for an image and gets back a URL. Silly makes the image once, stores it in S3-compatible storage (Tigris on fly.io), and serves it from then on. Chat apps such as Slack show the URL as an image like any other image link, so clients never need to upload files.
 
+## Website and API keys
+
+[silly.stahnma.us](https://silly.stahnma.us) has the API reference (built from each generator's own description, so it matches the code), live examples, and an OpenAPI spec at [`/openapi.json`](https://silly.stahnma.us/openapi.json).
+
+- **Getting a key:** sign in with GitHub, then make and revoke keys on `/account`, up to 5 each. A key is shown once and only its SHA-256 is stored, under `keys/<github id>/` in the bucket.
+- **Limits:** a signed-in user's key can make 60 images an hour (a 429 with `Retry-After` past that). A key unused for 180 days expires with the bucket's lifecycle rule.
+- **Configured keys:** keys in `SILLY_API_KEYS`, for your own bots, have no rate limit.
+- **Admin:** list and revoke signed-in users' keys from the fly machine:
+
+  ```sh
+  fly ssh console -C "node scripts/keys.js list"
+  fly ssh console -C "node scripts/keys.js revoke <key id>"
+  fly ssh console -C "node scripts/keys.js revoke-user <github login>"
+  ```
+
 ## API
 
 ### `POST /v1/<generator>`: make an image
@@ -24,6 +39,7 @@ curl -X POST https://silly.stahnma.us/v1/awyiss \
   - `401`: missing or unknown key.
   - `404`: no such generator.
   - `413`: body over 16 KB.
+  - `429`: over a signed-in user's rate limit.
   - `502`: the generator's upstream failed.
 
 ### `GET /i/<id>.png`: an image
@@ -40,7 +56,7 @@ Returns `{"ok": true}`.
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `awyiss`   | `{"text": "...", "sfw": false}`: text is 1–40 characters. `sfw` is optional and defaults to `true` ("motha freakin"); `false` gives the original comic's wording.                                                                                                                                                                                                                                                                                                                                   | [awyisser.com](https://www.awyisser.com)'s API ([quinnkeast/awyisser](https://github.com/quinnkeast/awyisser))                                                                                  |
 | `orly`     | `{"title": "...", "guide_text": "...", "top_text": "...", "author": "...", "guide_placement": "bottom_right", "animal": 12, "theme": 3}`: only `title` is required. `guide_text` defaults to "The Definitive Guide". `guide_placement` is `bottom_right` (default), `bottom_left`, `top_right` or `top_left`. `animal` is 1–40 and `theme` (the colour) 0–16; when either is left out, it's picked from the text, so the same text gives the same cover. Text that won't fit on the cover is a 400. | Drawn by silly, following [charleshberlin/O-RLY-Book-Generator](https://github.com/charleshberlin/O-RLY-Book-Generator)'s layout and animal pictures, with free fonts (see `assets/README.md`). |
-| `mustache` | `{"url": "https://...", "style": 2}`: `url` is an http(s) link to a JPEG, PNG, GIF, WebP or BMP. `style` is 1 (classic curly), 2 (bushy) or 3 (smooth, emoji-like); when it's left out, it's picked from the URL. Every face found gets a mustache; no faces is a 400. Returns a JPEG, at most 1200px on its longest side.                                                                                                                                                                                         | Faces found by [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (MIT) with ONNX Runtime. Mustaches are drawn by silly.                                       |
+| `mustache` | `{"url": "https://...", "style": 2}`: `url` is an http(s) link to a JPEG, PNG, GIF, WebP or BMP. `style` is 1 (classic curly), 2 (bushy) or 3 (smooth, emoji-like); when it's left out, it's picked from the URL. Every face found gets a mustache; no faces is a 400. Returns a JPEG, at most 1200px on its longest side.                                                                                                                                                                          | Faces found by [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (MIT) with ONNX Runtime. Mustaches are drawn by silly.                                       |
 
 To add one, write `src/generators/<name>.js` exporting an object with:
 
@@ -64,7 +80,7 @@ Then register it in `src/server.js`. See `src/generators/awyiss.js`.
 
 ## Logs
 
-There's one JSON line per request. It includes the time, method, path, status, duration, client IP (`Fly-Client-IP`) and user agent. For image requests it also has the image id; for generate requests, the generator, which key was used, whether the image was already stored, and render time. API keys are never logged; the `key` field is just the key's position in `SILLY_API_KEYS`.
+There's one JSON line per request. It includes the time, method, path, status, duration, client IP (`Fly-Client-IP`) and user agent. For image requests it also has the image id; for generate requests, the generator, which key was used, whether the image was already stored, and render time. API keys are never logged. The `key` field is the key's position in `SILLY_API_KEYS`, or `gh:<login>` for a signed-in user's key. Signing in, and making or revoking a key, are logged with the GitHub login.
 
 ```sh
 fly logs -a stahnma-silly
@@ -72,12 +88,14 @@ fly logs -a stahnma-silly
 
 ## Configuration
 
-| Variable                                                                                         |                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `SILLY_API_KEYS`                                                                                 | Comma-separated keys allowed to make images. Required. Use two while rotating a key.                                                  |
-| `SILLY_PUBLIC_URL`                                                                               | Base URL in returned links. Set in `fly.toml`.                                                                                        |
-| `PORT`                                                                                           | Default `8080`.                                                                                                                       |
-| `BUCKET_NAME`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | The bucket. `fly storage create` sets them all. If `BUCKET_NAME` isn't set, images are kept in memory, which is for development only. |
+| Variable                                                                                         |                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `SILLY_API_KEYS`                                                                                 | Comma-separated keys allowed to make images. Required. Use two while rotating a key.                                                     |
+| `SILLY_PUBLIC_URL`                                                                               | Base URL in returned links. Set in `fly.toml`.                                                                                           |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                                                       | A GitHub OAuth app, for signing in to get a key.                                                                                         |
+| `SILLY_SESSION_SECRET`                                                                           | Signs session cookies; a long random string. Without this and the GitHub settings, sign-in is off and the site says keys are by request. |
+| `PORT`                                                                                           | Default `8080`.                                                                                                                          |
+| `BUCKET_NAME`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | The bucket. `fly storage create` sets them all. If `BUCKET_NAME` isn't set, images are kept in memory, which is for development only.    |
 
 ## Development
 
@@ -110,6 +128,18 @@ fly secrets set --app stahnma-silly SILLY_API_KEYS="$(openssl rand -hex 32)"
 fly deploy
 fly ssh console --app stahnma-silly -C "node scripts/set-lifecycle.js"   # 180-day expiry
 fly certs add silly.stahnma.us --app stahnma-silly
+```
+
+For sign-in, create a GitHub OAuth app at <https://github.com/settings/applications/new>:
+
+- **Homepage URL:** `https://silly.stahnma.us`
+- **Authorization callback URL:** `https://silly.stahnma.us/auth/github/callback`
+
+Then set its ID and a new client secret, and a session secret:
+
+```sh
+fly secrets set --app stahnma-silly GITHUB_CLIENT_ID=<client id> GITHUB_CLIENT_SECRET=<client secret>
+fly secrets set --app stahnma-silly SILLY_SESSION_SECRET="$(openssl rand -hex 32)"
 ```
 
 For the domain, add DNS records for `silly.stahnma.us` as `fly certs add` describes. Usually that's a CNAME to `stahnma-silly.fly.dev`, or the A/AAAA records from `fly ips list`. Then wait for `fly certs show silly.stahnma.us --app stahnma-silly` to report the certificate as issued. Every image URL uses `SILLY_PUBLIC_URL` (`https://silly.stahnma.us`, set in `fly.toml`), so links already posted keep working if silly moves to another host or bucket.

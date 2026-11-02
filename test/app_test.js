@@ -19,6 +19,12 @@ describe('app', () => {
 
   const fake = {
     contentType: 'image/png',
+    docs: {
+      title: 'Fake',
+      summary: 'A fake generator.',
+      fields: [{ name: 'text', type: 'string', required: true, description: 'Some text.' }],
+      example: { text: 'example' },
+    },
     validate(input) {
       if (!input.text) throw new BadRequest('text is required');
       if (input.text === 'upstream') return { text: 'upstream' };
@@ -158,7 +164,7 @@ describe('app', () => {
       body: '{}',
     });
     assert.strictEqual(res.status, 404);
-    assert.strictEqual((await fetch(`${base}/`)).status, 404);
+    assert.strictEqual((await fetch(`${base}/nope`)).status, 404);
     assert.strictEqual((await fetch(`${base}/healthz`)).status, 200);
   });
 
