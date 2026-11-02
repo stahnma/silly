@@ -19,7 +19,9 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import { imageSize } from 'image-size';
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const MAX_PIXELS = 40_000_000;
+// 16 megapixels decodes to 64 MB, which the 512 MB machine can afford a
+// couple of at once (src/photo.js).
+const MAX_PIXELS = 16_000_000;
 const MAX_REDIRECTS = 3;
 // Raster formats only: an SVG can reference other files when it's drawn.
 const FORMATS = ['jpg', 'png', 'gif', 'webp', 'bmp'];

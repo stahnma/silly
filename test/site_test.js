@@ -265,6 +265,16 @@ describe('site', () => {
     const revoked = await post(`/account/keys/${id}/revoke`, { Cookie: cookie });
     assert.strictEqual(revoked.status, 303);
     assert.strictEqual((await make()).status, 401);
+
+    // The limit is per GitHub account, so a new key doesn't reset it.
+    const another = await post('/account/keys', { Cookie: cookie });
+    const newKey = /silly_4242_[A-Za-z0-9_-]{32}/.exec(await another.text())[0];
+    const res = await fetch(`${base}/v1/fake`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${newKey}` },
+      body: '{"text":"hi"}',
+    });
+    assert.strictEqual(res.status, 429);
   });
 
   it('refuses account form posts from other sites', async () => {
@@ -277,6 +287,12 @@ describe('site', () => {
       redirect: 'manual',
     });
     assert.strictEqual(noOrigin.status, 403);
+    const badReferer = await fetch(`${base}/account/keys`, {
+      method: 'POST',
+      headers: { Cookie: cookie, Referer: 'not a url' },
+      redirect: 'manual',
+    });
+    assert.strictEqual(badReferer.status, 403);
   });
 
   it('signs out', async () => {

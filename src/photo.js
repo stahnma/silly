@@ -1,16 +1,25 @@
 // What the photo generators (mustache, santa) share: the url field, fetching
 // the photo safely (src/fetch-image.js), finding faces (src/faces.js), and
 // drawing on each face before encoding a JPEG.
+//
+// Decoding a photo takes up to about 64 MB (16 megapixels of RGBA), so only a
+// couple are decoded at once, and only a few fetched photos wait for that;
+// past that, requests get a Busy error (a 503) instead of running the machine
+// out of memory.
 
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { BadRequest } from './app.js';
 import { detectFaces } from './faces.js';
 import { fetchImage as defaultFetchImage, FetchError } from './fetch-image.js';
+import { createLimiter } from './limiter.js';
 
 export const MAX_URL_LENGTH = 2048;
 // Output is scaled down to this on its longest side.
 const MAX_OUTPUT = 1200;
 const JPEG_QUALITY = 88;
+// Fetching holds at most 10 MB per photo; decoding much more.
+const fetching = createLimiter({ max: 4, maxWaiting: 32 });
+const decoding = createLimiter({ max: 2, maxWaiting: 4 });
 
 export const URL_FIELD = {
   name: 'url',
@@ -46,25 +55,34 @@ export const validateUrl = input => {
 // Fetch the photo at url, call draw(ctx, face) for every face in it (in the
 // photo's own coordinates), and return a JPEG. No faces is a BadRequest.
 export const decoratePhoto = async (url, draw, { fetchImage = defaultFetchImage } = {}) => {
-  let image;
+  let bytes;
   try {
-    image = await loadImage(await fetchImage(url));
+    bytes = await fetching.run(() => fetchImage(url));
   } catch (err) {
     if (err instanceof FetchError) throw new BadRequest(`couldn't use that image: ${err.message}`);
-    throw new BadRequest("couldn't read that image");
+    throw err;
   }
 
-  const faces = await detectFaces(image);
-  if (faces.length === 0) throw new BadRequest('no faces found in that image');
+  return decoding.run(async () => {
+    let image;
+    try {
+      image = await loadImage(bytes);
+    } catch {
+      throw new BadRequest("couldn't read that image");
+    }
 
-  const scale = Math.min(1, MAX_OUTPUT / Math.max(image.width, image.height));
-  const canvas = createCanvas(Math.round(image.width * scale), Math.round(image.height * scale));
-  const ctx = canvas.getContext('2d');
-  // JPEG has no transparency; put transparent images on white.
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.scale(scale, scale);
-  ctx.drawImage(image, 0, 0);
-  for (const face of faces) draw(ctx, face);
-  return canvas.encode('jpeg', JPEG_QUALITY);
+    const faces = await detectFaces(image);
+    if (faces.length === 0) throw new BadRequest('no faces found in that image');
+
+    const scale = Math.min(1, MAX_OUTPUT / Math.max(image.width, image.height));
+    const canvas = createCanvas(Math.round(image.width * scale), Math.round(image.height * scale));
+    const ctx = canvas.getContext('2d');
+    // JPEG has no transparency; put transparent images on white.
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(image, 0, 0);
+    for (const face of faces) draw(ctx, face);
+    return canvas.encode('jpeg', JPEG_QUALITY);
+  });
 };

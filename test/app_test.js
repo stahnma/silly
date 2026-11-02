@@ -3,8 +3,10 @@
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { createApp, imageId, BadRequest, UpstreamError } from '../src/app.js';
 import { createMemoryStore } from '../src/store.js';
+import { Busy } from '../src/limiter.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const DAY = 24 * 60 * 60 * 1000;
@@ -32,6 +34,8 @@ describe('app', () => {
     },
     async render({ text }) {
       renders.push(text);
+      if (text === 'slow') await new Promise(resolve => setTimeout(resolve, 50));
+      if (text === 'busy') throw new Busy('silly is busy; try again shortly');
       if (text === 'upstream') throw new UpstreamError('the other site is down');
       if (text === 'crash') throw new Error('boom');
       return PNG;
@@ -87,6 +91,31 @@ describe('app', () => {
     assert.strictEqual(logs.at(-1).key, 0);
   });
 
+  it('makes an image once when the same request arrives while it is being made', async () => {
+    const [a, b] = await Promise.all([make({ text: 'slow' }), make({ text: 'slow' })]);
+    assert.strictEqual(a.status, 200);
+    assert.strictEqual(b.status, 200);
+    assert.deepStrictEqual(renders, ['slow']);
+  });
+
+  it('says 503 with Retry-After when too busy to make an image', async () => {
+    const res = await make({ text: 'busy' });
+    assert.strictEqual(res.status, 503);
+    assert.ok(Number(res.headers.get('retry-after')) > 0);
+  });
+
+  it('answers a request path that is not a URL with a 400, and keeps running', async () => {
+    const status = await new Promise((resolve, reject) => {
+      const socket = connect(server.address().port, '127.0.0.1', () =>
+        socket.write('GET //[ HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n')
+      );
+      socket.once('data', d => resolve(d.toString().split(' ')[1]));
+      socket.on('error', reject);
+    });
+    assert.strictEqual(status, '400');
+    assert.strictEqual((await fetch(`${base}/healthz`)).status, 200);
+  });
+
   it('gives the same id whatever order the parameters are in', () => {
     assert.strictEqual(imageId('fake', { a: 1, b: 2 }), imageId('fake', { b: 2, a: 1 }));
     assert.notStrictEqual(imageId('fake', { a: 1 }), imageId('other', { a: 1 }));
@@ -99,6 +128,7 @@ describe('app', () => {
     assert.strictEqual(res.headers.get('content-type'), 'image/png');
     assert.match(res.headers.get('cache-control'), /immutable/);
     assert.strictEqual(res.headers.get('etag'), `"${id}"`);
+    assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff');
     assert.ok(Buffer.from(await res.arrayBuffer()).equals(PNG));
   });
 
