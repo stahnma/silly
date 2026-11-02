@@ -1,0 +1,26 @@
+{
+  "name": "silly",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Image generators for chat bots (aw yiss, and more to come), served from S3-compatible storage",
+  "author": "stahnma@devops.af",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*_test.js",
+    "lifecycle": "node scripts/set-lifecycle.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10"
+  }
+}

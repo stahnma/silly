@@ -1,0 +1,48 @@
+// Entry point: read configuration from the environment and listen.
+//
+//   SILLY_API_KEYS   - comma-separated keys allowed to make images (required).
+//                      More than one lets a key be rotated without downtime.
+//   SILLY_PUBLIC_URL - base URL images are served from, e.g. https://silly.fly.dev
+//   PORT             - default 8080
+//   BUCKET_NAME      - S3 bucket for images. `fly storage create` sets it, along
+//                      with AWS_ENDPOINT_URL_S3, AWS_REGION, AWS_ACCESS_KEY_ID and
+//                      AWS_SECRET_ACCESS_KEY, which the AWS SDK reads itself.
+//                      Without it, images are kept in memory (local development).
+
+import { createServer } from 'node:http';
+import { createApp } from './app.js';
+import { createS3Store, createMemoryStore } from './store.js';
+import { createAwyiss } from './generators/awyiss.js';
+
+const apiKeys = (process.env.SILLY_API_KEYS || '')
+  .split(',')
+  .map(k => k.trim())
+  .filter(Boolean);
+if (apiKeys.length === 0) {
+  console.error('SILLY_API_KEYS is not set; refusing to start.');
+  process.exit(1);
+}
+
+const port = Number(process.env.PORT || 8080);
+const publicUrl = process.env.SILLY_PUBLIC_URL || `http://localhost:${port}`;
+const bucket = process.env.BUCKET_NAME;
+if (!bucket) console.warn('BUCKET_NAME is not set; storing images in memory.');
+
+const app = createApp({
+  store: bucket ? createS3Store({ bucket }) : createMemoryStore(),
+  generators: { awyiss: createAwyiss() },
+  apiKeys,
+  publicUrl,
+});
+
+const server = createServer(app);
+server.listen(port, () => {
+  console.log(
+    JSON.stringify({ msg: 'listening', port, publicUrl, store: bucket ? 's3' : 'memory' })
+  );
+});
+
+// Fly sends SIGINT on deploys and scale-downs; finish in-flight requests.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => server.close(() => process.exit(0)));
+}

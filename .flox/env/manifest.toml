@@ -1,0 +1,20 @@
+# Flox environment for silly: everything needed to develop, test and deploy
+# the service, locally and in CI. See flox.dev/docs/concepts/manifest/.
+
+schema-version = "1.19.0"
+
+[install]
+nodejs.pkg-path = "nodejs_24"
+nodejs.outputs = ["out"]
+gnumake.pkg-path = "gnumake"
+jq.pkg-path = "jq"
+# fly deploy, fly logs, fly storage
+flyctl.pkg-path = "flyctl"
+
+[hook]
+on-activate = '''
+  echo "silly: 'make dev' to run locally (in-memory storage), 'make test' to run tests."
+'''
+
+[options]
+systems = ["aarch64-darwin", "aarch64-linux", "x86_64-linux"]

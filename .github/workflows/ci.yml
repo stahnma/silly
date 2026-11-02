@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Node comes from .flox/env/manifest.toml, so CI runs the same versions
+      # as local development.
+      - uses: flox/install-flox-action@v2
+
+      - name: Install dependencies
+        run: flox activate -- npm ci
+
+      - name: Lint
+        run: flox activate -- make lint
+
+      - name: Test
+        run: flox activate -- make test

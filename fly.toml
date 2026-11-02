@@ -1,0 +1,28 @@
+# fly.io config. App names are global on fly.io and "silly" is taken, so the
+# app is stahnma-silly. If you rename it, change SILLY_PUBLIC_URL to match.
+app = "stahnma-silly"
+primary_region = "ord"
+
+[env]
+  PORT = "8080"
+  SILLY_PUBLIC_URL = "https://stahnma-silly.fly.dev"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Slack fetches the image when it shows the message; one machine stays up so
+  # that fetch never waits for a cold start.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
