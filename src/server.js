@@ -13,6 +13,7 @@ import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { createS3Store, createMemoryStore } from './store.js';
 import { createAwyiss } from './generators/awyiss.js';
+import { createOrly } from './generators/orly.js';
 
 const apiKeys = (process.env.SILLY_API_KEYS || '')
   .split(',')
@@ -30,7 +31,7 @@ if (!bucket) console.warn('BUCKET_NAME is not set; storing images in memory.');
 
 const app = createApp({
   store: bucket ? createS3Store({ bucket }) : createMemoryStore(),
-  generators: { awyiss: createAwyiss() },
+  generators: { awyiss: createAwyiss(), orly: createOrly() },
   apiKeys,
   publicUrl,
 });

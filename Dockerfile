@@ -4,6 +4,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
+COPY assets ./assets
 COPY scripts ./scripts
 USER node
 EXPOSE 8080
