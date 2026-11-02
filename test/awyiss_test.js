@@ -21,7 +21,7 @@ const jsonResponse = (body, status = 200) =>
 describe('awyiss', () => {
   it('validates and normalizes the text', () => {
     const { validate } = createAwyiss({ fetch: fakeFetch(() => {}) });
-    assert.deepStrictEqual(validate({ text: '  more   burritos ' }), { text: 'more burritos' });
+    assert.deepStrictEqual(validate({ text: '  More   Burritos ' }), { text: 'more burritos' });
     assert.throws(() => validate({}), BadRequest);
     assert.throws(() => validate({ text: '   ' }), BadRequest);
     assert.throws(() => validate({ text: 42 }), BadRequest);
@@ -37,6 +37,19 @@ describe('awyiss', () => {
     assert.strictEqual(url, 'https://www.awyisser.com/api/generator');
     assert.strictEqual(options.method, 'POST');
     assert.deepStrictEqual(JSON.parse(options.body), { value: 'more burritos', sfw: true });
+  });
+
+  it('takes an optional sfw flag, included in the parameters only when false', () => {
+    const { validate } = createAwyiss({ fetch: fakeFetch(() => {}) });
+    assert.deepStrictEqual(validate({ text: 'x', sfw: true }), { text: 'x' });
+    assert.deepStrictEqual(validate({ text: 'x', sfw: false }), { text: 'x', sfw: false });
+    assert.throws(() => validate({ text: 'x', sfw: 'no' }), /sfw must be true or false/);
+  });
+
+  it('asks for the original wording when sfw is false', async () => {
+    const fetch = fakeFetch(() => jsonResponse({ image: dataUrl(PNG) }));
+    await createAwyiss({ fetch }).render({ text: 'tacos', sfw: false });
+    assert.deepStrictEqual(JSON.parse(fetch.calls[0].options.body), { value: 'tacos', sfw: false });
   });
 
   it('turns awyisser.com failures into upstream errors', async () => {

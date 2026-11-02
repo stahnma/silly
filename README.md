@@ -36,9 +36,9 @@ Returns `{"ok": true}`.
 
 ## Generators
 
-| Name     | Input                              | Source                                                                                                                             |
-| -------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `awyiss` | `{"text": "..."}`, 1–40 characters | [awyisser.com](https://www.awyisser.com)'s API ([quinnkeast/awyisser](https://github.com/quinnkeast/awyisser)), safe-for-work mode |
+| Name     | Input                                                                                                                                                             | Source                                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `awyiss` | `{"text": "...", "sfw": false}`: text is 1–40 characters. `sfw` is optional and defaults to `true` ("motha freakin"); `false` gives the original comic's wording. | [awyisser.com](https://www.awyisser.com)'s API ([quinnkeast/awyisser](https://github.com/quinnkeast/awyisser)) |
 
 Planned: O RLY covers ([stahnma/burrito#79](https://github.com/stahnma/burrito/issues/79)) and mustache me ([stahnma/burrito#175](https://github.com/stahnma/burrito/issues/175)).
 
