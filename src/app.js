@@ -129,6 +129,9 @@ export const createApp = ({
   keys = null,
   auth = null,
   rateLimit = null,
+  // The header a trusted proxy puts the client's address in, e.g.
+  // 'fly-client-ip' or 'x-forwarded-for'; without one, the connecting address.
+  clientIpHeader = null,
   log = entry => console.log(JSON.stringify(entry)),
   now = () => Date.now(),
   touchAfterMs = DAY_MS,
@@ -136,6 +139,23 @@ export const createApp = ({
   const checkKey = keyChecker(apiKeys);
   const base = publicUrl.replace(/\/+$/, '');
   const baseOrigin = new URL(base).origin;
+  const ipHeader = clientIpHeader?.toLowerCase();
+
+  // The client's address, for the logs. A header is only used when configured,
+  // since clients can send any header they like. For X-Forwarded-For, the last
+  // entry is the one the proxy in front of silly added; earlier ones could be
+  // made up.
+  const clientIp = req => {
+    const value = ipHeader && req.headers[ipHeader];
+    if (value) {
+      const parts = String(value)
+        .split(',')
+        .map(p => p.trim())
+        .filter(Boolean);
+      if (parts.length) return ipHeader === 'x-forwarded-for' ? parts[parts.length - 1] : parts[0];
+    }
+    return req.socket?.remoteAddress;
+  };
   const limits = { perHour: rateLimit?.limits.perHour ?? 0, maxKeys: MAX_KEYS_PER_USER };
 
   // Reset an image's last-modified time so the bucket's expiry rule counts
@@ -385,7 +405,7 @@ export const createApp = ({
       t: new Date(started).toISOString(),
       method: req.method,
       path,
-      ip: req.headers['fly-client-ip'] || req.socket?.remoteAddress,
+      ip: clientIp(req),
       ua: req.headers['user-agent'],
     };
     res.on('finish', () => {

@@ -4,6 +4,9 @@
 //                      More than one lets a key be rotated without downtime.
 //   SILLY_PUBLIC_URL - base URL images are served from, e.g. https://silly.fly.dev
 //   PORT             - default 8080
+//   SILLY_CLIENT_IP_HEADER - the header a proxy in front of silly puts the
+//                      client's address in (e.g. Fly-Client-IP, X-Forwarded-For),
+//                      for the logs; without it, the connecting address
 //   BUCKET_NAME      - S3 bucket for images. `fly storage create` sets it, along
 //                      with AWS_ENDPOINT_URL_S3, AWS_REGION, AWS_ACCESS_KEY_ID and
 //                      AWS_SECRET_ACCESS_KEY, which the AWS SDK reads itself.
@@ -57,6 +60,7 @@ const app = createApp({
       })
     : null,
   rateLimit: createRateLimit(),
+  clientIpHeader: process.env.SILLY_CLIENT_IP_HEADER || null,
 });
 
 const server = createServer(app);

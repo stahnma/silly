@@ -176,7 +176,51 @@ describe('app', () => {
     assert.strictEqual(entry.path, '/healthz');
     assert.strictEqual(entry.status, 200);
     assert.strictEqual(entry.ua, 'Slackbot 1.0');
-    assert.strictEqual(entry.ip, '1.2.3.4');
+    // No client IP header is configured, so the header is ignored.
+    assert.match(entry.ip, /127\.0\.0\.1$/);
     assert.strictEqual(typeof entry.ms, 'number');
+  });
+});
+
+describe('client IP in logs', () => {
+  // A request to a fresh app with the given header configured; the logged IP.
+  const loggedIp = async (clientIpHeader, headers) => {
+    const logs = [];
+    const app = createApp({
+      store: createMemoryStore(),
+      generators: {},
+      apiKeys: ['k'],
+      publicUrl: 'https://silly.example',
+      clientIpHeader,
+      log: entry => logs.push(entry),
+    });
+    const server = createServer(app);
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      await fetch(`http://127.0.0.1:${server.address().port}/healthz`, { headers });
+      return logs.at(-1).ip;
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  };
+
+  it('uses a configured header, case-insensitively', async () => {
+    assert.strictEqual(await loggedIp('Fly-Client-IP', { 'Fly-Client-IP': '1.2.3.4' }), '1.2.3.4');
+    assert.strictEqual(
+      await loggedIp('cf-connecting-ip', { 'CF-Connecting-IP': '2001:db8::1' }),
+      '2001:db8::1'
+    );
+  });
+
+  it("uses X-Forwarded-For's last entry, the one the proxy added", async () => {
+    assert.strictEqual(
+      await loggedIp('X-Forwarded-For', { 'X-Forwarded-For': '6.6.6.6, 10.0.0.1, 5.6.7.8' }),
+      '5.6.7.8'
+    );
+  });
+
+  it('falls back to the connecting address when the header is missing', async () => {
+    assert.match(await loggedIp('Fly-Client-IP', {}), /127\.0\.0\.1$/);
+    assert.match(await loggedIp('X-Forwarded-For', { 'X-Forwarded-For': ' , ' }), /127\.0\.0\.1$/);
   });
 });
