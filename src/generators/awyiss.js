@@ -1,6 +1,10 @@
 // Aw yiss: Kate Beaton's duck comic with your phrase, from awyisser.com
 // (github.com/quinnkeast/awyisser). The site's API returns the PNG as a
 // base64 data URL; this passes it through.
+//
+// The comic's "motha ___" line is part of awyisser's background image. With
+// sfw (the default) it reads "motha freakin"; {"sfw": false} gives the
+// original comic's wording.
 
 import { BadRequest, UpstreamError } from '../app.js';
 
@@ -13,24 +17,30 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 export const createAwyiss = ({ fetch = globalThis.fetch } = {}) => ({
   contentType: 'image/png',
 
-  // {"text": "more burritos"} -> {text: "more burritos"}. Whitespace is
-  // collapsed so "more  burritos" is the same image.
+  // {"text": "More  Burritos"} -> {text: "more burritos"}. awyisser lowercases
+  // the text, and whitespace is collapsed, so variants share one image.
+  // sfw is only included when false, so safe-for-work images keep the ids
+  // they had before the flag existed.
   validate(input) {
-    const text = typeof input.text === 'string' ? input.text.replace(/\s+/g, ' ').trim() : '';
+    const text =
+      typeof input.text === 'string' ? input.text.replace(/\s+/g, ' ').trim().toLowerCase() : '';
     if (!text) throw new BadRequest('text is required');
     if ([...text].length > MAX_LENGTH) {
       throw new BadRequest(`text must be at most ${MAX_LENGTH} characters`);
     }
-    return { text };
+    if (input.sfw !== undefined && typeof input.sfw !== 'boolean') {
+      throw new BadRequest('sfw must be true or false');
+    }
+    return input.sfw === false ? { text, sfw: false } : { text };
   },
 
-  async render({ text }) {
+  async render({ text, sfw = true }) {
     let res;
     try {
       res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: text, sfw: true }),
+        body: JSON.stringify({ value: text, sfw }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (err) {
