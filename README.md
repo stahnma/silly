@@ -1,6 +1,6 @@
 # silly
 
-Silly image generators for chat bots and anything else that can post a link: aw yiss comics, O RLY book covers and mustaches on photos.
+Silly image generators for chat bots and anything else that can post a link: aw yiss comics, O RLY book covers, and mustaches or Santa hats on photos.
 
 A client asks silly for an image and gets back a URL. Silly makes the image once, stores it in S3-compatible storage and serves it from then on. Chat apps such as Slack show the URL as an image like any other image link, so clients never need to upload files.
 
@@ -81,6 +81,14 @@ A mustache on every face in a photo. Faces are found by [YuNet](https://github.c
 
 No faces is a 400. Returns a JPEG, at most 1200 px on its longest side.
 
+### `santa`
+
+A Santa hat on every face in a photo, drawn by silly and placed from the eyes, so it's sized to each head and tilted with it. Faces are found the same way as for `mustache`.
+
+- `url` (required): an http(s) link to a JPEG, PNG, GIF, WebP or BMP.
+
+No faces is a 400. Returns a JPEG, at most 1200 px on its longest side.
+
 ### Adding a generator
 
 Write `src/generators/<name>.js` exporting an object with:
@@ -94,7 +102,7 @@ Then register it in `src/server.js`. See `src/generators/awyiss.js`.
 
 ## Fetching images
 
-`mustache` downloads the image at the URL it's given, so it refuses anything that could reach an internal service:
+`mustache` and `santa` download the image at the URL they're given, so it refuses anything that could reach an internal service:
 
 - **Allowed:** http and https only. Every connection's address is checked after DNS resolution, and redirects (at most 3) are checked the same way. So neither a hostname nor a redirect can lead to a private, loopback, link-local or IPv6 unique-local address.
 - **Size and format:** images are limited to 10 MB and 40 megapixels, and must be a raster format. SVGs are refused because they can reference other files.
@@ -151,7 +159,7 @@ What it needs from its host:
 
 - **An S3-compatible bucket** and credentials for it.
 - **HTTPS in front of it,** at the domain in `SILLY_PUBLIC_URL`. Chat apps generally preview only https links, and session cookies are marked `Secure` when the URL is https.
-- **About 512 MB of memory.** Face detection for `mustache` peaks around 250 MB.
+- **About 512 MB of memory.** Face detection for `mustache` and `santa` peaks around 250 MB.
 - **At least one instance always running.** Chat apps fetch an image when they show the message, and a cold start can make them give up on the preview. Rate limits are kept in each process's memory, so several instances make them looser, not stricter.
 
 To set up a new instance:

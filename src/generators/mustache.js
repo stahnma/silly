@@ -6,36 +6,23 @@
 // picked from the URL, so the same request gives the same image.
 
 import { createHash } from 'node:crypto';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { BadRequest } from '../app.js';
-import { detectFaces } from '../faces.js';
 import { STYLE_COUNT, drawMustache } from '../mustaches.js';
-import { fetchImage as defaultFetchImage, FetchError } from '../fetch-image.js';
+import { URL_FIELD, EXAMPLE_PHOTO, validateUrl, decoratePhoto } from '../photo.js';
 
-const MAX_URL_LENGTH = 2048;
-// Output is scaled down to this on its longest side.
-const MAX_OUTPUT = 1200;
-const JPEG_QUALITY = 88;
 // Part of every image's parameters, so changing how mustaches look gives new
 // requests new images instead of the stored ones. Old URLs keep working.
 // 2: the meme-style mustaches.
 const VERSION = 2;
 
-export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
+export const createMustache = ({ fetchImage } = {}) => ({
   contentType: 'image/jpeg',
 
   docs: {
     title: 'Mustache me',
     summary: 'A mustache on every face in a photo.',
     fields: [
-      {
-        name: 'url',
-        type: 'string',
-        required: true,
-        maxLength: MAX_URL_LENGTH,
-        description:
-          'An http(s) link to a JPEG, PNG, GIF, WebP or BMP, up to 10 MB. Internal addresses are refused.',
-      },
+      URL_FIELD,
       {
         name: 'style',
         type: 'integer',
@@ -44,59 +31,22 @@ export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
         description: '1 classic curly, 2 bushy, 3 smooth. Picked from the URL when left out.',
       },
     ],
-    example: {
-      url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Apollo_11_Crew.jpg/1280px-Apollo_11_Crew.jpg',
-      style: 1,
-    },
+    example: { url: EXAMPLE_PHOTO, style: 1 },
   },
 
   validate(input) {
-    const url = typeof input.url === 'string' ? input.url.trim() : '';
-    if (!url) throw new BadRequest('url is required');
-    if (url.length > MAX_URL_LENGTH) {
-      throw new BadRequest(`url must be at most ${MAX_URL_LENGTH} characters`);
-    }
-    let parsed;
-    try {
-      parsed = new URL(url);
-    } catch {
-      throw new BadRequest('url is not a valid URL');
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new BadRequest('url must be http or https');
-    }
+    const url = validateUrl(input);
 
     let style = input.style;
     if (style === undefined || style === null) {
-      style = (createHash('sha256').update(parsed.href).digest().readUInt32BE(0) % STYLE_COUNT) + 1;
+      style = (createHash('sha256').update(url).digest().readUInt32BE(0) % STYLE_COUNT) + 1;
     } else if (!Number.isInteger(style) || style < 1 || style > STYLE_COUNT) {
       throw new BadRequest(`style must be a whole number from 1 to ${STYLE_COUNT}`);
     }
-    return { url: parsed.href, style, version: VERSION };
+    return { url, style, version: VERSION };
   },
 
-  async render({ url, style }) {
-    let image;
-    try {
-      image = await loadImage(await fetchImage(url));
-    } catch (err) {
-      if (err instanceof FetchError)
-        throw new BadRequest(`couldn't use that image: ${err.message}`);
-      throw new BadRequest("couldn't read that image");
-    }
-
-    const faces = await detectFaces(image);
-    if (faces.length === 0) throw new BadRequest('no faces found in that image');
-
-    const scale = Math.min(1, MAX_OUTPUT / Math.max(image.width, image.height));
-    const canvas = createCanvas(Math.round(image.width * scale), Math.round(image.height * scale));
-    const ctx = canvas.getContext('2d');
-    // JPEG has no transparency; put transparent images on white.
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
-    ctx.drawImage(image, 0, 0);
-    for (const face of faces) drawMustache(ctx, face, style);
-    return canvas.encode('jpeg', JPEG_QUALITY);
+  render({ url, style }) {
+    return decoratePhoto(url, (ctx, face) => drawMustache(ctx, face, style), { fetchImage });
   },
 });
