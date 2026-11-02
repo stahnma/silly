@@ -29,3 +29,7 @@ The website's fonts, for the Neobrutalism design system from [Open Design](https
 | `Inter-*.woff2`        | [Inter](https://github.com/rsms/inter)                                                                  | SIL Open Font License 1.1 (`Inter-OFL.txt`)        |
 
 Latin and Latin Extended subsets, from Google Fonts.
+
+## `site/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`
+
+The site icon: silly's own classic curly mustache (`src/mustaches.js`) on a vermilion tile, in the Neobrutalism style. Made by `node scripts/make-favicon.js`; run it again if the mustaches change.
