@@ -6,7 +6,7 @@
 // picked from the URL, so the same request gives the same image.
 
 import { createHash } from 'node:crypto';
-import { createCanvas, loadImage, Path2D } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { BadRequest } from '../app.js';
 import { detectFaces } from '../faces.js';
 import { STYLE_COUNT, drawMustache } from '../mustaches.js';
@@ -16,6 +16,10 @@ const MAX_URL_LENGTH = 2048;
 // Output is scaled down to this on its longest side.
 const MAX_OUTPUT = 1200;
 const JPEG_QUALITY = 88;
+// Part of every image's parameters, so changing how mustaches look gives new
+// requests new images instead of the stored ones. Old URLs keep working.
+// 2: the meme-style mustaches.
+const VERSION = 2;
 
 export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
   contentType: 'image/jpeg',
@@ -42,7 +46,7 @@ export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
     } else if (!Number.isInteger(style) || style < 1 || style > STYLE_COUNT) {
       throw new BadRequest(`style must be a whole number from 1 to ${STYLE_COUNT}`);
     }
-    return { url: parsed.href, style };
+    return { url: parsed.href, style, version: VERSION };
   },
 
   async render({ url, style }) {
@@ -66,7 +70,7 @@ export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale);
     ctx.drawImage(image, 0, 0);
-    for (const face of faces) drawMustache(ctx, Path2D, face, style);
+    for (const face of faces) drawMustache(ctx, face, style);
     return canvas.encode('jpeg', JPEG_QUALITY);
   },
 });
