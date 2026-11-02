@@ -102,7 +102,7 @@ Then register it in `src/server.js`. See `src/generators/awyiss.js`.
 
 ## Fetching images
 
-`mustache` and `santa` download the image at the URL they're given, so it refuses anything that could reach an internal service:
+`mustache` and `santa` download the image at the URL they're given, so silly refuses anything that could reach an internal service:
 
 - **Allowed:** http and https only. Every connection's address is checked after DNS resolution, and redirects (at most 3) are checked the same way. So neither a hostname nor a redirect can lead to a private, loopback, link-local or IPv6 unique-local address.
 - **Size and format:** images are limited to 10 MB and 40 megapixels, and must be a raster format. SVGs are refused because they can reference other files.
