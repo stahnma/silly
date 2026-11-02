@@ -12,8 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Node comes from .flox/env/manifest.toml, so CI runs the same versions
-      # as local development.
+      # Node and flyctl come from .flox/env/manifest.toml, so CI runs the same
+      # versions as local development.
       - uses: flox/install-flox-action@v2
 
       - name: Install dependencies
@@ -24,3 +24,24 @@ jobs:
 
       - name: Test
         run: flox activate -- make test
+
+  # Every push to main (i.e. every merge) deploys to fly.io once lint and tests
+  # pass. FLY_API_TOKEN is a deploy token scoped to the app:
+  #   fly tokens create deploy -a stahnma-silly | gh secret set FLY_API_TOKEN
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One deploy at a time; a newer merge waits rather than racing.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: flox/install-flox-action@v2
+
+      - name: Deploy
+        run: flox activate -- fly deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

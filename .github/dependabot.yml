@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Commits must pass the Conventional Commits check (feat/fix/bug/chore).
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # One PR for all minor/patch bumps; majors still arrive individually.
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"
