@@ -26,4 +26,5 @@ primary_region = "ord"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  # Face detection (onnxruntime) and decoding photos need more than 256mb.
+  memory = "512mb"
