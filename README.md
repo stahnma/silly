@@ -1,8 +1,8 @@
 # silly
 
-Silly image generators for chat bots, starting with [aw yiss](https://www.awyisser.com). It replaces the Heroku apps that the old Hubot scripts relied on, which are gone now.
+Silly image generators for chat bots and anything else that can post a link, starting with [aw yiss](https://www.awyisser.com).
 
-A bot asks silly for an image and gets back a URL. Silly makes the image once, stores it in S3-compatible storage (Tigris on fly.io), and serves it from then on. Slack unfurls the URL like any other image link, so the bot never uploads files.
+A client asks silly for an image and gets back a URL. Silly makes the image once, stores it in S3-compatible storage (Tigris on fly.io), and serves it from then on. Chat apps such as Slack show the URL as an image like any other image link, so clients never need to upload files.
 
 ## API
 
@@ -40,7 +40,7 @@ Returns `{"ok": true}`.
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `awyiss` | `{"text": "...", "sfw": false}`: text is 1–40 characters. `sfw` is optional and defaults to `true` ("motha freakin"); `false` gives the original comic's wording. | [awyisser.com](https://www.awyisser.com)'s API ([quinnkeast/awyisser](https://github.com/quinnkeast/awyisser)) |
 
-Planned: O RLY covers ([stahnma/burrito#79](https://github.com/stahnma/burrito/issues/79)) and mustache me ([stahnma/burrito#175](https://github.com/stahnma/burrito/issues/175)).
+Planned: O RLY book covers and mustache me.
 
 To add one, write `src/generators/<name>.js` exporting an object with:
 
@@ -83,7 +83,17 @@ make lint
 make dev      # http://localhost:8080, in-memory storage, API key "dev"
 ```
 
-## Deploying to fly.io (first time)
+## Deploying
+
+Merging to `main` deploys automatically. The CI workflow runs lint and tests, then `fly deploy` using the `FLY_API_TOKEN` repository secret, a deploy token scoped to the app. To create or replace that token:
+
+```sh
+fly tokens create deploy -a stahnma-silly | gh secret set FLY_API_TOKEN -R stahnma/silly
+```
+
+Dependabot opens weekly PRs for npm packages and GitHub Actions.
+
+## Setting up on fly.io (first time)
 
 ```sh
 flox activate
@@ -97,6 +107,6 @@ fly certs add silly.stahnma.us --app stahnma-silly
 
 For the domain, add DNS records for `silly.stahnma.us` as `fly certs add` describes. Usually that's a CNAME to `stahnma-silly.fly.dev`, or the A/AAAA records from `fly ips list`. Then wait for `fly certs show silly.stahnma.us --app stahnma-silly` to report the certificate as issued. Every image URL uses `SILLY_PUBLIC_URL` (`https://silly.stahnma.us`, set in `fly.toml`), so links already posted keep working if silly moves to another host or bucket.
 
-Then give the bot the URL and the key, e.g. for burrito, `HUBOT_SILLY_URL=https://silly.stahnma.us` and `HUBOT_SILLY_KEY=<the key>`. You can read the key back with `fly ssh console -C 'printenv SILLY_API_KEYS'`.
+Then give each client the base URL (`https://silly.stahnma.us`) and an API key. You can read the keys back with `fly ssh console -C 'printenv SILLY_API_KEYS'`.
 
 `fly.toml` keeps one machine running, so Slack's image fetch never waits on a cold start.
