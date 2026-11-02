@@ -1,11 +1,12 @@
 # fly.io config. App names are global on fly.io and "silly" is taken, so the
-# app is stahnma-silly. If you rename it, change SILLY_PUBLIC_URL to match.
+# app is stahnma-silly. It's served at silly.stahnma.us (see README), which is
+# the domain in every image URL, so posted links survive a move off fly.io.
 app = "stahnma-silly"
 primary_region = "ord"
 
 [env]
   PORT = "8080"
-  SILLY_PUBLIC_URL = "https://stahnma-silly.fly.dev"
+  SILLY_PUBLIC_URL = "https://silly.stahnma.us"
 
 [http_service]
   internal_port = 8080

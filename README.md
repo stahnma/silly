@@ -11,11 +11,11 @@ A bot asks silly for an image and gets back a URL. Silly makes the image once, s
 Needs an API key: `Authorization: Bearer <key>`. The body is JSON, and its fields depend on the generator.
 
 ```sh
-curl -X POST https://stahnma-silly.fly.dev/v1/awyiss \
+curl -X POST https://silly.stahnma.us/v1/awyiss \
   -H "Authorization: Bearer $SILLY_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"text": "more burritos"}'
-# {"url":"https://stahnma-silly.fly.dev/i/4089656e893939785c39fbb5c4cd166a.png","id":"4089656e893939785c39fbb5c4cd166a"}
+# {"url":"https://silly.stahnma.us/i/4089656e893939785c39fbb5c4cd166a.png","id":"4089656e893939785c39fbb5c4cd166a"}
 ```
 
 - The id is a hash of the generator and its parameters. The same request always gets the same URL, and only the first one actually makes the image.
@@ -36,8 +36,8 @@ Returns `{"ok": true}`.
 
 ## Generators
 
-| Name | Input | Source |
-|---|---|---|
+| Name     | Input                              | Source                                                                                                                             |
+| -------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `awyiss` | `{"text": "..."}`, 1–40 characters | [awyisser.com](https://www.awyisser.com)'s API ([quinnkeast/awyisser](https://github.com/quinnkeast/awyisser)), safe-for-work mode |
 
 Planned: O RLY covers ([stahnma/burrito#79](https://github.com/stahnma/burrito/issues/79)) and mustache me ([stahnma/burrito#175](https://github.com/stahnma/burrito/issues/175)).
@@ -65,11 +65,11 @@ fly logs -a stahnma-silly
 
 ## Configuration
 
-| Variable | |
-|---|---|
-| `SILLY_API_KEYS` | Comma-separated keys allowed to make images. Required. Use two while rotating a key. |
-| `SILLY_PUBLIC_URL` | Base URL in returned links. Set in `fly.toml`. |
-| `PORT` | Default `8080`. |
+| Variable                                                                                         |                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `SILLY_API_KEYS`                                                                                 | Comma-separated keys allowed to make images. Required. Use two while rotating a key.                                                  |
+| `SILLY_PUBLIC_URL`                                                                               | Base URL in returned links. Set in `fly.toml`.                                                                                        |
+| `PORT`                                                                                           | Default `8080`.                                                                                                                       |
 | `BUCKET_NAME`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | The bucket. `fly storage create` sets them all. If `BUCKET_NAME` isn't set, images are kept in memory, which is for development only. |
 
 ## Development
@@ -92,8 +92,11 @@ fly storage create --app stahnma-silly          # Tigris bucket; sets BUCKET_NAM
 fly secrets set --app stahnma-silly SILLY_API_KEYS="$(openssl rand -hex 32)"
 fly deploy
 fly ssh console --app stahnma-silly -C "node scripts/set-lifecycle.js"   # 180-day expiry
+fly certs add silly.stahnma.us --app stahnma-silly
 ```
 
-Then give the bot the URL and the key, e.g. for burrito, `HUBOT_SILLY_URL=https://stahnma-silly.fly.dev` and `HUBOT_SILLY_KEY=<the key>`. You can read the key back with `fly ssh console -C 'printenv SILLY_API_KEYS'`.
+For the domain, add DNS records for `silly.stahnma.us` as `fly certs add` describes. Usually that's a CNAME to `stahnma-silly.fly.dev`, or the A/AAAA records from `fly ips list`. Then wait for `fly certs show silly.stahnma.us --app stahnma-silly` to report the certificate as issued. Every image URL uses `SILLY_PUBLIC_URL` (`https://silly.stahnma.us`, set in `fly.toml`), so links already posted keep working if silly moves to another host or bucket.
+
+Then give the bot the URL and the key, e.g. for burrito, `HUBOT_SILLY_URL=https://silly.stahnma.us` and `HUBOT_SILLY_KEY=<the key>`. You can read the key back with `fly ssh console -C 'printenv SILLY_API_KEYS'`.
 
 `fly.toml` keeps one machine running, so Slack's image fetch never waits on a cold start.
