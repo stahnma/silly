@@ -78,6 +78,18 @@ const FONTS = new Map(
     .map(f => [f, readFileSync(new URL(f, FONT_DIR))])
 );
 
+// The site's icons (assets/site, made by scripts/make-favicon.js), read once.
+const ICONS = new Map(
+  [
+    ['/favicon.svg', 'favicon.svg', 'image/svg+xml'],
+    ['/favicon.ico', 'favicon.ico', 'image/x-icon'],
+    ['/apple-touch-icon.png', 'apple-touch-icon.png', 'image/png'],
+  ].map(([path, file, type]) => [
+    path,
+    { type, body: readFileSync(new URL(`../assets/site/${file}`, import.meta.url)) },
+  ])
+);
+
 // Pages are self-contained: no scripts, no outside resources.
 const HTML_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
@@ -390,6 +402,14 @@ export const createApp = ({
         sendJson(res, 200, { ok: true });
       } else if (path === '/' && isGet) {
         sendHtml(res, 200, renderHome({ base, generators, limits, ...pageContext(req) }));
+      } else if (ICONS.has(path) && isGet) {
+        const icon = ICONS.get(path);
+        res.writeHead(200, {
+          'Content-Type': icon.type,
+          'Content-Length': icon.body.length,
+          'Cache-Control': 'public, max-age=604800',
+        });
+        res.end(req.method === 'HEAD' ? undefined : icon.body);
       } else if (path.startsWith('/assets/fonts/') && isGet) {
         const font = FONTS.get(path.slice('/assets/fonts/'.length));
         if (!font) {

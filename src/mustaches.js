@@ -167,6 +167,13 @@ const SHAPES = Object.fromEntries(
   Object.entries(STYLES).map(([style, spec]) => [style, outline(spec)])
 );
 
+// A style's whole outline (both halves) as polygons in mustache units, for
+// drawing it elsewhere: scripts/make-favicon.js uses it for the site icon.
+export const mustacheOutline = style => {
+  const right = SHAPES[style].polygon;
+  return [right, right.map(([x, y]) => [-x, y])];
+};
+
 const fillPolygon = (ctx, polygon) => {
   ctx.beginPath();
   polygon.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));

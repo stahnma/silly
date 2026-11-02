@@ -127,6 +127,23 @@ describe('site', () => {
     assert.match(csp, /font-src 'self'/);
   });
 
+  it('serves the icons, and the pages link them', async () => {
+    for (const [path, type, magic] of [
+      ['/favicon.svg', 'image/svg+xml', '<svg'],
+      ['/favicon.ico', 'image/x-icon', '\x00\x00\x01\x00'],
+      ['/apple-touch-icon.png', 'image/png', '\x89PNG'],
+    ]) {
+      const res = await get(path);
+      assert.strictEqual(res.status, 200, path);
+      assert.strictEqual(res.headers.get('content-type'), type, path);
+      const body = Buffer.from(await res.arrayBuffer()).toString('latin1');
+      assert.ok(body.startsWith(magic), path);
+    }
+    const html = await (await get('/')).text();
+    assert.match(html, /<link rel="icon" href="\/favicon.svg" type="image\/svg\+xml">/);
+    assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon.png">/);
+  });
+
   it('serves an OpenAPI spec', async () => {
     const spec = await (await get('/openapi.json')).json();
     assert.strictEqual(spec.openapi, '3.1.0');
