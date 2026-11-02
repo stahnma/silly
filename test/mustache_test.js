@@ -19,6 +19,7 @@ describe('mustache', () => {
     const params = validate({ url: ' https://example.com/me.jpg ' });
     assert.strictEqual(params.url, 'https://example.com/me.jpg');
     assert.ok([1, 2, 3].includes(params.style));
+    assert.strictEqual(params.version, 2);
     assert.deepStrictEqual(validate({ url: 'https://example.com/me.jpg' }), params);
     assert.deepStrictEqual(validate({ url: 'https://example.com/me.jpg', style: 3 }).style, 3);
   });
