@@ -8,6 +8,8 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   CopyObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { createS3Store } from '../src/store.js';
 
@@ -71,5 +73,31 @@ describe('S3 store', () => {
     assert.strictEqual(input.MetadataDirective, 'REPLACE');
     assert.strictEqual(input.ContentType, 'image/png');
     assert.ok(input.Metadata.touched);
+  });
+
+  it('lists objects under a prefix, across pages', async () => {
+    const d = new Date('2026-10-01T00:00:00Z');
+    s3.on(ListObjectsV2Command, { Bucket: 'silly-images', Prefix: 'keys/42/' })
+      .resolvesOnce({
+        Contents: [{ Key: 'keys/42/a.json', LastModified: d }],
+        IsTruncated: true,
+        NextContinuationToken: 'next',
+      })
+      .resolvesOnce({ Contents: [{ Key: 'keys/42/b.json', LastModified: d }], IsTruncated: false });
+    assert.deepStrictEqual(await store.list('keys/42/'), [
+      { key: 'keys/42/a.json', lastModified: d },
+      { key: 'keys/42/b.json', lastModified: d },
+    ]);
+    const calls = s3.commandCalls(ListObjectsV2Command);
+    assert.strictEqual(calls[1].args[0].input.ContinuationToken, 'next');
+  });
+
+  it('deletes an object', async () => {
+    s3.on(DeleteObjectCommand).resolves({});
+    await store.delete('keys/42/a.json');
+    assert.deepStrictEqual(s3.commandCalls(DeleteObjectCommand)[0].args[0].input, {
+      Bucket: 'silly-images',
+      Key: 'keys/42/a.json',
+    });
   });
 });

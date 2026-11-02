@@ -24,6 +24,32 @@ const VERSION = 2;
 export const createMustache = ({ fetchImage = defaultFetchImage } = {}) => ({
   contentType: 'image/jpeg',
 
+  docs: {
+    title: 'Mustache me',
+    summary: 'A mustache on every face in a photo.',
+    fields: [
+      {
+        name: 'url',
+        type: 'string',
+        required: true,
+        maxLength: MAX_URL_LENGTH,
+        description:
+          'An http(s) link to a JPEG, PNG, GIF, WebP or BMP, up to 10 MB. Internal addresses are refused.',
+      },
+      {
+        name: 'style',
+        type: 'integer',
+        minimum: 1,
+        maximum: STYLE_COUNT,
+        description: '1 classic curly, 2 bushy, 3 smooth. Picked from the URL when left out.',
+      },
+    ],
+    example: {
+      url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Apollo_11_Crew.jpg/1280px-Apollo_11_Crew.jpg',
+      style: 1,
+    },
+  },
+
   validate(input) {
     const url = typeof input.url === 'string' ? input.url.trim() : '';
     if (!url) throw new BadRequest('url is required');

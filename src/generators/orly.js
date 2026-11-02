@@ -125,6 +125,69 @@ const optionalInt = (input, field, min, max) => {
 export const createOrly = () => ({
   contentType: 'image/png',
 
+  docs: {
+    title: 'O RLY',
+    summary: "A parody O'Reilly book cover: an animal, a title and an author.",
+    fields: [
+      {
+        name: 'title',
+        type: 'string',
+        required: true,
+        maxLength: MAX_LENGTH.title,
+        description: 'The title. It must fit on the cover, on one line or two.',
+      },
+      {
+        name: 'guide_text',
+        type: 'string',
+        default: 'The Definitive Guide',
+        maxLength: MAX_LENGTH.guide_text,
+        description: 'The italic line by the title block.',
+      },
+      {
+        name: 'top_text',
+        type: 'string',
+        default: '',
+        maxLength: MAX_LENGTH.top_text,
+        description: 'The small line across the top.',
+      },
+      {
+        name: 'author',
+        type: 'string',
+        default: '',
+        maxLength: MAX_LENGTH.author,
+        description: 'Bottom right.',
+      },
+      {
+        name: 'guide_placement',
+        type: 'string',
+        enum: PLACEMENTS,
+        default: 'bottom_right',
+        description: 'Which corner of the title block the guide text goes in.',
+      },
+      {
+        name: 'animal',
+        type: 'integer',
+        minimum: 1,
+        maximum: ANIMALS,
+        description: 'Which of the 40 animals. Picked from the text when left out.',
+      },
+      {
+        name: 'theme',
+        type: 'integer',
+        minimum: 0,
+        maximum: THEMES.length - 1,
+        description: 'Which of the 17 colours. Picked from the text when left out.',
+      },
+    ],
+    example: {
+      title: 'Yak Shaving',
+      top_text: 'Before we can start, we need to',
+      author: 'silly',
+      animal: 25,
+      theme: 13,
+    },
+  },
+
   validate(input) {
     const title = optionalText(input, 'title', '');
     if (!title) throw new BadRequest('title is required');

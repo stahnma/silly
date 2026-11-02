@@ -17,6 +17,28 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 export const createAwyiss = ({ fetch = globalThis.fetch } = {}) => ({
   contentType: 'image/png',
 
+  docs: {
+    title: 'Aw yiss',
+    summary: "Kate Beaton's duck comic with your phrase, made by awyisser.com.",
+    fields: [
+      {
+        name: 'text',
+        type: 'string',
+        required: true,
+        maxLength: MAX_LENGTH,
+        description: 'The phrase, up to 40 characters. Lowercased, as the comic letters it.',
+      },
+      {
+        name: 'sfw',
+        type: 'boolean',
+        default: true,
+        description:
+          'The "motha ___" line: `true` gives "motha freakin", `false` the original comic\'s "motha fuckin".',
+      },
+    ],
+    example: { text: 'more silly images' },
+  },
+
   // {"text": "More  Burritos"} -> {text: "more burritos"}. awyisser lowercases
   // the text, and whitespace is collapsed, so variants share one image.
   // sfw is only included when false, so safe-for-work images keep the ids
