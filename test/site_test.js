@@ -111,6 +111,22 @@ describe('site', () => {
     assert.match(html, /src="\/examples\/fake"/);
   });
 
+  it('serves the site fonts, and lets pages use only those', async () => {
+    const font = await get('/assets/fonts/ArchivoBlack-latin.woff2');
+    assert.strictEqual(font.status, 200);
+    assert.strictEqual(font.headers.get('content-type'), 'font/woff2');
+    assert.strictEqual(
+      Buffer.from(await font.arrayBuffer())
+        .subarray(0, 4)
+        .toString(),
+      'wOF2'
+    );
+    assert.strictEqual((await get('/assets/fonts/nope.woff2')).status, 404);
+    assert.strictEqual((await get('/assets/fonts/../../package.json')).status, 404);
+    const csp = (await get('/')).headers.get('content-security-policy');
+    assert.match(csp, /font-src 'self'/);
+  });
+
   it('serves an OpenAPI spec', async () => {
     const spec = await (await get('/openapi.json')).json();
     assert.strictEqual(spec.openapi, '3.1.0');

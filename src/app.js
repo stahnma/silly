@@ -12,6 +12,7 @@
 // /account, where signed-in users make and revoke their API keys.
 
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import { renderHome, renderAccount, renderMessage, openApi } from './site.js';
 import { KeyLimitError, MAX_KEYS_PER_USER } from './keys.js';
 
@@ -69,11 +70,19 @@ const readBody = req =>
     req.on('error', reject);
   });
 
+// The site's fonts (assets/site/fonts), read once.
+const FONT_DIR = new URL('../assets/site/fonts/', import.meta.url);
+const FONTS = new Map(
+  readdirSync(FONT_DIR)
+    .filter(f => f.endsWith('.woff2'))
+    .map(f => [f, readFileSync(new URL(f, FONT_DIR))])
+);
+
 // Pages are self-contained: no scripts, no outside resources.
 const HTML_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
   'Content-Security-Policy':
-    "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'Cache-Control': 'no-store',
@@ -381,6 +390,18 @@ export const createApp = ({
         sendJson(res, 200, { ok: true });
       } else if (path === '/' && isGet) {
         sendHtml(res, 200, renderHome({ base, generators, limits, ...pageContext(req) }));
+      } else if (path.startsWith('/assets/fonts/') && isGet) {
+        const font = FONTS.get(path.slice('/assets/fonts/'.length));
+        if (!font) {
+          sendJson(res, 404, { error: 'not found' });
+        } else {
+          res.writeHead(200, {
+            'Content-Type': 'font/woff2',
+            'Content-Length': font.length,
+            'Cache-Control': 'public, max-age=604800',
+          });
+          res.end(req.method === 'HEAD' ? undefined : font);
+        }
       } else if (path === '/openapi.json' && isGet) {
         sendJson(res, 200, openApi({ base, generators }));
       } else if (example && isGet) {

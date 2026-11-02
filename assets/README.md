@@ -18,3 +18,14 @@ Both come from [google/fonts](https://github.com/google/fonts).
 ## `mustache/`
 
 `face_detection_yunet_2026may.onnx` is YuNet from the [OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), by Shiqi Yu et al. It's MIT-licensed; the licence is in `mustache/YUNET-LICENSE.txt`. The mustaches themselves are vector paths in `src/mustaches.js`.
+
+## `site/fonts/`
+
+The website's fonts, for the Neobrutalism design system from [Open Design](https://github.com/feimacode/open-design-agent-kit) (MIT):
+
+| File                   | Font                                                                                                    | Licence                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `ArchivoBlack-*.woff2` | [Archivo Black](https://github.com/Omnibus-Type/ArchivoBlack), standing in for the system's Arial Black | SIL Open Font License 1.1 (`ArchivoBlack-OFL.txt`) |
+| `Inter-*.woff2`        | [Inter](https://github.com/rsms/inter)                                                                  | SIL Open Font License 1.1 (`Inter-OFL.txt`)        |
+
+Latin and Latin Extended subsets, from Google Fonts.
