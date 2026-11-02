@@ -25,6 +25,7 @@ import { createRateLimit } from './ratelimit.js';
 import { createAwyiss } from './generators/awyiss.js';
 import { createOrly } from './generators/orly.js';
 import { createMustache } from './generators/mustache.js';
+import { createSanta } from './generators/santa.js';
 
 const apiKeys = (process.env.SILLY_API_KEYS || '')
   .split(',')
@@ -47,7 +48,12 @@ if (!signIn) console.warn('GitHub sign-in is not configured; keys are by request
 const store = bucket ? createS3Store({ bucket }) : createMemoryStore();
 const app = createApp({
   store,
-  generators: { awyiss: createAwyiss(), orly: createOrly(), mustache: createMustache() },
+  generators: {
+    awyiss: createAwyiss(),
+    orly: createOrly(),
+    mustache: createMustache(),
+    santa: createSanta(),
+  },
   apiKeys,
   publicUrl,
   keys: createKeys({ store }),
