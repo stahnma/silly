@@ -1,6 +1,6 @@
-// A token bucket per key, in memory: each key may make up to `capacity`
-// requests at once, refilling at `perHour` an hour. With more than one
-// machine each keeps its own count, which only makes the limit looser.
+// A token bucket per id (a GitHub account), in memory: each may make up to
+// `capacity` requests at once, refilling at `perHour` an hour. With more than
+// one machine each keeps its own count, which only makes the limit looser.
 
 export const createRateLimit = ({ capacity = 60, perHour = 60, now = () => Date.now() } = {}) => {
   const buckets = new Map();

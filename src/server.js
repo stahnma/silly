@@ -44,6 +44,10 @@ if (!bucket) console.warn('BUCKET_NAME is not set; storing images in memory.');
 const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, SILLY_SESSION_SECRET } = process.env;
 const signIn = Boolean(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && SILLY_SESSION_SECRET);
 if (!signIn) console.warn('GitHub sign-in is not configured; keys are by request only.');
+// Anyone who guesses it can sign session cookies as any user.
+if (signIn && SILLY_SESSION_SECRET.length < 32) {
+  console.warn('SILLY_SESSION_SECRET is short; use at least 32 random characters.');
+}
 
 const store = bucket ? createS3Store({ bucket }) : createMemoryStore();
 const app = createApp({

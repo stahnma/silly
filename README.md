@@ -11,7 +11,7 @@ A running silly serves a home page at `/` with live examples and the API referen
 ## API keys
 
 - **Signing in:** people get a key by signing in with GitHub and making one on `/account`, up to 5 each. They can revoke their keys there too. A key is shown once; only its SHA-256 is stored, under `keys/<github id>/` in the bucket.
-- **Limits:** a signed-in user's key can make 60 images an hour, then gets a 429 with `Retry-After`. A key unused for 180 days expires with the bucket's lifecycle rule (see [Storage and expiry](#storage-and-expiry)).
+- **Limits:** a signed-in user can make 60 images an hour, across all their keys, then gets a 429 with `Retry-After`. A key unused for 180 days expires with the bucket's lifecycle rule (see [Storage and expiry](#storage-and-expiry)).
 - **Configured keys:** keys in `SILLY_API_KEYS` are for your own bots and have no rate limit.
 - **Without sign-in:** if sign-in isn't configured, the site says keys are given out by request.
 - **Admin:** list and revoke signed-in users' keys from anywhere the bucket's credentials are set:
@@ -105,7 +105,7 @@ Then register it in `src/server.js`. See `src/generators/awyiss.js`.
 `mustache` and `santa` download the image at the URL they're given, so silly refuses anything that could reach an internal service:
 
 - **Allowed:** http and https only. Every connection's address is checked after DNS resolution, and redirects (at most 3) are checked the same way. So neither a hostname nor a redirect can lead to a private, loopback, link-local or IPv6 unique-local address.
-- **Size and format:** images are limited to 10 MB and 40 megapixels, and must be a raster format. SVGs are refused because they can reference other files.
+- **Size and format:** images are limited to 10 MB and 16 megapixels, and must be a raster format. SVGs are refused because they can reference other files.
 
 ## Storage and expiry
 

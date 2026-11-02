@@ -80,7 +80,10 @@ export const createKeys = ({ store, now = () => Date.now() }) => {
 
       const key = objectKey(m[1], hash);
       const record = await read(key);
-      cache.set(hash, { at: now(), record });
+      // Only real keys are cached: anyone can send made-up ones, and caching
+      // those would let them grow the cache without end.
+      if (record) cache.set(hash, { at: now(), record });
+      else cache.delete(hash);
       if (record && now() - record.lastUsed.getTime() >= DAY_MS) {
         store.touch(key, 'application/json').catch(() => {});
       }

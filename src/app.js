@@ -15,6 +15,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { renderHome, renderAccount, renderMessage, openApi } from './site.js';
 import { KeyLimitError, MAX_KEYS_PER_USER } from './keys.js';
+import { Busy } from './limiter.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -182,24 +183,40 @@ export const createApp = ({
       'Content-Length': object.body.length,
       // An id always names the same image.
       'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
       ETag: `"${match[1]}"`,
     });
     res.end(req.method === 'HEAD' ? undefined : object.body);
   };
+
+  // Images being found or made right now, by key, so the same request
+  // arriving again waits for that one instead of making the image twice.
+  const pending = new Map();
 
   // Find the stored image for these parameters, or make and store it.
   const makeImage = async (name, generator, params, entry) => {
     const id = imageId(name, params);
     entry.id = id;
     const key = `${id}.${EXTENSIONS[generator.contentType]}`;
-    if (await store.exists(key)) {
+    let work = pending.get(key);
+    if (work) {
+      await work;
       entry.cached = true;
     } else {
-      const started = now();
-      const body = await generator.render(params);
-      entry.renderMs = now() - started;
-      await store.put(key, body, generator.contentType);
-      entry.cached = false;
+      work = (async () => {
+        if (await store.exists(key)) return { cached: true };
+        const started = now();
+        const body = await generator.render(params);
+        const renderMs = now() - started;
+        await store.put(key, body, generator.contentType);
+        return { cached: false, renderMs };
+      })();
+      pending.set(key, work);
+      try {
+        Object.assign(entry, await work);
+      } finally {
+        pending.delete(key);
+      }
     }
     return { id, key, url: `${base}/i/${key}` };
   };
@@ -224,9 +241,12 @@ export const createApp = ({
   // Form posts must come from silly's own pages (SameSite cookies do most of
   // this; the Origin check covers the rest).
   const fromThisSite = req => {
-    const origin =
-      req.headers.origin || (req.headers.referer && new URL(req.headers.referer).origin);
-    return origin === baseOrigin;
+    if (req.headers.origin) return req.headers.origin === baseOrigin;
+    try {
+      return new URL(req.headers.referer).origin === baseOrigin;
+    } catch {
+      return false;
+    }
   };
 
   const pageContext = req => ({ user: auth?.session(req) ?? null, signInEnabled: Boolean(auth) });
@@ -376,7 +396,8 @@ export const createApp = ({
         return;
       }
       entry.key = `gh:${record.login}`;
-      const allowed = rateLimit ? rateLimit.take(record.id) : { ok: true };
+      // One limit per GitHub account, shared by all its keys.
+      const allowed = rateLimit ? rateLimit.take(record.githubId) : { ok: true };
       if (!allowed.ok) {
         entry.limited = true;
         res.setHeader('Retry-After', String(allowed.retryAfter));
@@ -400,11 +421,10 @@ export const createApp = ({
 
   return async (req, res) => {
     const started = now();
-    const path = new URL(req.url, 'http://silly').pathname;
     const entry = {
       t: new Date(started).toISOString(),
       method: req.method,
-      path,
+      path: req.url,
       ip: clientIp(req),
       ua: req.headers['user-agent'],
     };
@@ -413,7 +433,17 @@ export const createApp = ({
     });
 
     try {
-      const query = new URL(req.url, 'http://silly').searchParams;
+      // The request target can be anything a client sends; one that doesn't
+      // parse is the client's mistake, and must not take the process down.
+      let url;
+      try {
+        url = new URL(req.url, 'http://silly');
+      } catch {
+        throw new BadRequest('not a valid request path');
+      }
+      const path = url.pathname;
+      entry.path = path;
+      const query = url.searchParams;
       const image = IMAGE_PATH.exec(path);
       const generator = /^\/v1\/([a-z0-9-]+)$/.exec(path);
       const example = /^\/examples\/([a-z0-9-]+)$/.exec(path);
@@ -468,6 +498,10 @@ export const createApp = ({
       }
       if (err instanceof BadRequest) {
         sendJson(res, 400, { error: err.message });
+      } else if (err instanceof Busy) {
+        entry.busy = true;
+        res.setHeader('Retry-After', '5');
+        sendJson(res, 503, { error: err.message });
       } else if (err instanceof UpstreamError) {
         entry.error = err.message;
         sendJson(res, 502, { error: err.message });
