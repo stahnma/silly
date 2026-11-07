@@ -161,7 +161,8 @@ ${body}
   <p>silly is <a href="${SOURCE}">open source</a>.
   Aw yiss comics come from <a href="https://www.awyisser.com">awyisser.com</a> (the comic is Kate Beaton's).
   O RLY covers follow Charles Berlin's <a href="https://github.com/charleshberlin/O-RLY-Book-Generator">O-RLY-Book-Generator</a>.
-  Faces are found by <a href="https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet">YuNet</a>.</p>
+  Faces are found by <a href="https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet">YuNet</a>.
+  The "Really? Right in front of my" character is Flork of Cows'.</p>
 </div></footer>
 </body>
 </html>
@@ -385,6 +386,24 @@ export const openApi = ({ base, generators }) => ({
                   },
                   example: g.docs.example,
                 },
+                // Generators that take uploads take the same fields as a
+                // form, with the image as a file.
+                ...(g.maxBodyBytes && {
+                  'multipart/form-data': {
+                    schema: {
+                      type: 'object',
+                      required: g.docs.fields.filter(f => f.required).map(f => f.name),
+                      properties: Object.fromEntries(
+                        g.docs.fields.map(f => [
+                          f.name,
+                          f.name === 'image'
+                            ? { type: 'string', format: 'binary', description: 'The image file.' }
+                            : schemaFor(f),
+                        ])
+                      ),
+                    },
+                  },
+                }),
               },
             },
             responses: {
@@ -396,7 +415,10 @@ export const openApi = ({ base, generators }) => ({
                 [
                   [400, 'Bad input.'],
                   [401, 'Missing or unknown API key.'],
-                  [413, 'Request body over 16 KB.'],
+                  [
+                    413,
+                    `Request body over ${g.maxBodyBytes ? `${Math.floor(g.maxBodyBytes / 1024 / 1024)} MB` : '16 KB'}.`,
+                  ],
                   [429, 'Over the rate limit; see Retry-After.'],
                   [502, 'An upstream service failed.'],
                 ].map(([code, description]) => [

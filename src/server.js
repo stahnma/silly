@@ -26,6 +26,7 @@ import { createAwyiss } from './generators/awyiss.js';
 import { createOrly } from './generators/orly.js';
 import { createMustache } from './generators/mustache.js';
 import { createSanta } from './generators/santa.js';
+import { createRrif } from './generators/rrif.js';
 
 const apiKeys = (process.env.SILLY_API_KEYS || '')
   .split(',')
@@ -57,6 +58,7 @@ const app = createApp({
     orly: createOrly(),
     mustache: createMustache(),
     santa: createSanta(),
+    rrif: createRrif(),
   },
   apiKeys,
   publicUrl,

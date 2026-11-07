@@ -19,6 +19,10 @@ Both come from [google/fonts](https://github.com/google/fonts).
 
 `face_detection_yunet_2026may.onnx` is YuNet from the [OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), by Shiqi Yu et al. It's MIT-licensed; the licence is in `mustache/YUNET-LICENSE.txt`. The mustaches themselves are vector paths in `src/mustaches.js`.
 
+## `rrif/`
+
+`template.jpg` is the blank "Really? Right in front of my" template from [imgflip](https://imgflip.com/memegenerator/471686459/Really-right-in-front-of-my), with the held object erased. The character is from [Flork of Cows](https://knowyourmeme.com/memes/really-right-in-front-of-my-x) (Flork), and the meme's original picture is believed to come from Filipino Telegram communities in 2021. It isn't under a licence: it's used as a meme template, as it is all over the internet. If you run your own silly and that's a problem for you, leave out `rrif` in `src/server.js`.
+
 ## `site/fonts/`
 
 The website's fonts, for the Neobrutalism design system from [Open Design](https://github.com/feimacode/open-design-agent-kit) (MIT):

@@ -18,7 +18,7 @@ import { BlockList, isIP } from 'node:net';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { imageSize } from 'image-size';
 
-const MAX_BYTES = 10 * 1024 * 1024;
+export const MAX_BYTES = 10 * 1024 * 1024;
 // 16 megapixels decodes to 64 MB, which the 512 MB machine can afford a
 // couple of at once (src/photo.js).
 const MAX_PIXELS = 16_000_000;
@@ -66,6 +66,29 @@ export const isBlockedAddress = address => {
 };
 
 export class FetchError extends Error {}
+
+// Returns bytes if they're an image silly will decode: at most MAX_BYTES, a
+// raster format, and at most MAX_PIXELS (read from the header, before
+// anything decodes it). Otherwise throws a FetchError. Used for fetched
+// images and for ones uploaded with a request.
+export const checkImage = bytes => {
+  if (bytes.length > MAX_BYTES) {
+    throw new FetchError(`the image is over ${MAX_BYTES / 1024 / 1024} MB`);
+  }
+  let size;
+  try {
+    size = imageSize(bytes);
+  } catch {
+    throw new FetchError("couldn't read that image");
+  }
+  if (!FORMATS.includes(size.type)) {
+    throw new FetchError(`${size.type} images aren't supported (only ${FORMATS.join(', ')})`);
+  }
+  if (size.width * size.height > MAX_PIXELS) {
+    throw new FetchError(`the image is too big (${size.width}x${size.height})`);
+  }
+  return bytes;
+};
 
 // A DNS lookup that refuses internal addresses; undici uses it for every
 // connection, including after a redirect.
@@ -152,20 +175,6 @@ export const fetchImage = async (url, { fetch = undiciFetch } = {}) => {
       await res.body?.cancel();
       throw new FetchError(`the image is over ${MAX_BYTES / 1024 / 1024} MB`);
     }
-    const bytes = await readCapped(res.body);
-
-    let size;
-    try {
-      size = imageSize(bytes);
-    } catch {
-      throw new FetchError("couldn't read that image");
-    }
-    if (!FORMATS.includes(size.type)) {
-      throw new FetchError(`${size.type} images aren't supported (only ${FORMATS.join(', ')})`);
-    }
-    if (size.width * size.height > MAX_PIXELS) {
-      throw new FetchError(`the image is too big (${size.width}x${size.height})`);
-    }
-    return bytes;
+    return checkImage(await readCapped(res.body));
   }
 };

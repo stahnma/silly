@@ -15,9 +15,12 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { renderHome, renderAccount, renderMessage, openApi } from './site.js';
 import { KeyLimitError, MAX_KEYS_PER_USER } from './keys.js';
-import { Busy } from './limiter.js';
+import { Busy, createLimiter } from './limiter.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
+// Generators that take uploaded images (those with `maxBodyBytes`) can have
+// bodies of several MB, so only a few are read at once; more wait, unread.
+const uploading = createLimiter({ max: 4, maxWaiting: 8 });
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
 const IMAGE_PATH = /^\/i\/([0-9a-f]{32})\.(png|jpg|gif)$/;
@@ -32,11 +35,16 @@ const sha256 = value => createHash('sha256').update(value).digest();
 
 // The image id: the same generator and parameters always give the same id,
 // so a repeated request finds the stored image instead of making a new one.
-// Parameters are sorted so key order doesn't matter.
+// Parameters are sorted so key order doesn't matter. A Buffer (an uploaded
+// image) counts by its SHA-256.
 export const imageId = (generator, params) => {
   const canonical = JSON.stringify([
     generator,
-    Object.fromEntries(Object.entries(params).sort(([a], [b]) => a.localeCompare(b))),
+    Object.fromEntries(
+      Object.entries(params)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, Buffer.isBuffer(v) ? `sha256:${sha256(v).toString('hex')}` : v])
+    ),
   ]);
   return sha256(canonical).toString('hex').slice(0, 32);
 };
@@ -52,14 +60,14 @@ const keyChecker = keys => {
   };
 };
 
-const readBody = req =>
+const readBody = (req, max) =>
   new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on('data', chunk => {
-      if (size > MAX_BODY_BYTES) return;
+      if (size > max) return;
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > max) {
         // Stop keeping it, but let the rest arrive so the 413 reaches the
         // client; the response closes the connection.
         reject(Object.assign(new Error('request body too large'), { status: 413 }));
@@ -67,7 +75,7 @@ const readBody = req =>
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 
@@ -109,6 +117,41 @@ const sendHtml = (res, status, html, headers = {}) => {
 const redirect = (res, location, status = 302, headers = {}) => {
   res.writeHead(status, { Location: location, 'Content-Length': 0, ...headers });
   res.end();
+};
+
+// A generator's input: a JSON object, or for generators that take uploads,
+// multipart/form-data too, where file parts become Buffers.
+const readInput = async (req, generator) => {
+  const uploads = Boolean(generator.maxBodyBytes);
+  const body = await (uploads
+    ? uploading.run(() => readBody(req, generator.maxBodyBytes))
+    : readBody(req, MAX_BODY_BYTES));
+  const type = req.headers['content-type'] || '';
+  if (uploads && /^multipart\/form-data\s*;/i.test(type)) {
+    let form;
+    try {
+      form = await new Response(body, { headers: { 'Content-Type': type } }).formData();
+    } catch {
+      throw new BadRequest('body is not valid multipart/form-data');
+    }
+    const input = {};
+    for (const [name, value] of form) {
+      input[name] = typeof value === 'string' ? value : Buffer.from(await value.arrayBuffer());
+    }
+    return input;
+  }
+  let input;
+  try {
+    input = JSON.parse(body.toString('utf8') || '{}');
+  } catch {
+    throw new BadRequest(
+      uploads ? 'body must be JSON or multipart/form-data' : 'body must be JSON'
+    );
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new BadRequest('body must be a JSON object');
+  }
+  return input;
 };
 
 const sendJson = (res, status, body) => {
@@ -408,13 +451,7 @@ export const createApp = ({
       }
     }
 
-    let input;
-    try {
-      input = JSON.parse((await readBody(req)) || '{}');
-    } catch (err) {
-      if (err.status) throw err;
-      throw new BadRequest('body must be JSON');
-    }
+    const input = await readInput(req, generator);
     const { id, url } = await makeImage(name, generator, generator.validate(input), entry);
     sendJson(res, 200, { url, id });
   };
