@@ -42,12 +42,26 @@ describe('app', () => {
     },
   };
 
+  // Takes uploads, like rrif: a bigger body, and multipart/form-data.
+  const upload = {
+    contentType: 'image/png',
+    maxBodyBytes: 64 * 1024,
+    docs: fake.docs,
+    validate(input) {
+      return { file: Buffer.isBuffer(input.file) ? input.file : Buffer.from(String(input.file)) };
+    },
+    async render({ file }) {
+      renders.push(file);
+      return PNG;
+    },
+  };
+
   before(async () => {
     clock = { now: Date.parse('2026-11-01T00:00:00Z') };
     store = createMemoryStore({ now: () => clock.now });
     const app = createApp({
       store,
-      generators: { fake },
+      generators: { fake, upload },
       apiKeys: ['old-key', 'new-key'],
       publicUrl: 'https://silly.example/',
       log: entry => logs.push(entry),
@@ -119,6 +133,15 @@ describe('app', () => {
   it('gives the same id whatever order the parameters are in', () => {
     assert.strictEqual(imageId('fake', { a: 1, b: 2 }), imageId('fake', { b: 2, a: 1 }));
     assert.notStrictEqual(imageId('fake', { a: 1 }), imageId('other', { a: 1 }));
+    // Buffers count by their contents, and don't change the ids of other params.
+    assert.strictEqual(
+      imageId('fake', { f: Buffer.from('ab') }),
+      imageId('fake', { f: Buffer.from('ab') })
+    );
+    assert.notStrictEqual(
+      imageId('fake', { f: Buffer.from('ab') }),
+      imageId('fake', { f: Buffer.from('ac') })
+    );
   });
 
   it('serves stored images publicly, with long-lived caching', async () => {
@@ -169,6 +192,53 @@ describe('app', () => {
     assert.deepStrictEqual(await res.json(), { error: 'text is required' });
     res = await make('{not json');
     assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects a body that is JSON but not an object', async () => {
+    for (const body of ['null', '[1]', '"text"']) {
+      const res = await make(body);
+      assert.strictEqual(res.status, 400, body);
+      assert.deepStrictEqual(await res.json(), { error: 'body must be a JSON object' });
+    }
+  });
+
+  it('takes multipart/form-data uploads for generators that take them', async () => {
+    const file = Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 8, 7]);
+    const form = new FormData();
+    form.append('file', new Blob([file], { type: 'image/png' }), 'x.png');
+    const res = await fetch(`${base}/v1/upload`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer new-key' },
+      body: form,
+    });
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(renders.length, 1);
+    assert.ok(renders[0].equals(file));
+    // The id counts the file by its contents.
+    assert.strictEqual((await res.json()).id, imageId('upload', { file }));
+  });
+
+  it('allows bigger bodies for generators that take uploads, up to their limit', async () => {
+    const post = body =>
+      fetch(`${base}/v1/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer new-key' },
+        body: JSON.stringify(body),
+      });
+    assert.strictEqual((await post({ file: 'x'.repeat(40000) })).status, 200);
+    assert.strictEqual((await post({ file: 'x'.repeat(70000) })).status, 413);
+  });
+
+  it('takes only JSON for generators without uploads', async () => {
+    const form = new FormData();
+    form.append('text', 'hi');
+    const res = await fetch(`${base}/v1/fake`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer new-key' },
+      body: form,
+    });
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(await res.json(), { error: 'body must be JSON' });
   });
 
   it('rejects oversized bodies with a 413', async () => {

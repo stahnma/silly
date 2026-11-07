@@ -1,6 +1,6 @@
 # silly
 
-Silly image generators for chat bots and anything else that can post a link: aw yiss comics, O RLY book covers, and mustaches or Santa hats on photos.
+Silly image generators for chat bots and anything else that can post a link: aw yiss comics, O RLY book covers, mustaches or Santa hats on photos, and "Really? Right in front of my X?"
 
 A client asks silly for an image and gets back a URL. Silly makes the image once, stores it in S3-compatible storage and serves it from then on. Chat apps such as Slack show the URL as an image like any other image link, so clients never need to upload files.
 
@@ -26,7 +26,7 @@ A running silly serves a home page at `/` with live examples and the API referen
 
 ### `POST /v1/<generator>`: make an image
 
-Needs an API key: `Authorization: Bearer <key>`. The body is JSON, and its fields depend on the generator.
+Needs an API key: `Authorization: Bearer <key>`. The body is JSON, and its fields depend on the generator. Generators that take an uploaded image (`rrif`) also take `multipart/form-data`, with the image as a file.
 
 ```sh
 curl -X POST https://silly.example.com/v1/awyiss \
@@ -41,7 +41,7 @@ curl -X POST https://silly.example.com/v1/awyiss \
   - `400`: bad input, e.g. the text is too long.
   - `401`: missing or unknown key.
   - `404`: no such generator.
-  - `413`: body over 16 KB.
+  - `413`: body over 16 KB (13 MB for generators that take uploads).
   - `429`: over a signed-in user's rate limit.
   - `502`: the generator's upstream failed.
 
@@ -89,6 +89,22 @@ A Santa hat on every face in a photo, drawn by silly and placed from the eyes, s
 
 No faces is a 400. Returns a JPEG, at most 1200 px on its longest side.
 
+### `rrif`
+
+[Really? Right in front of my X?](https://knowyourmeme.com/memes/really-right-in-front-of-my-x): the meme's own picture, with the X at the end of the caption and a picture of it in the character's hand.
+
+- `text`: the X, 1–60 characters, ending the caption. It must fit in four lines.
+- `image_url`: an http(s) link to a picture of the X, for the character to hold. Same formats and limits as `mustache`.
+- `image`: a picture of the X sent with the request, instead of `image_url`. In JSON, base64 or a `data:` URL; in `multipart/form-data`, a file.
+
+At least one of the three is required. With only a picture, the caption stops at "my" and the picture finishes it. Returns a 1044 px wide JPEG.
+
+```sh
+curl -X POST https://silly.example.com/v1/rrif \
+  -H "Authorization: Bearer $SILLY_KEY" \
+  -F text='crab rangoons' -F image=@rangoons.jpg
+```
+
 ### Adding a generator
 
 Write `src/generators/<name>.js` exporting an object with:
@@ -97,15 +113,17 @@ Write `src/generators/<name>.js` exporting an object with:
 - `docs`: a title, summary, field descriptions and an example. The website, OpenAPI spec and example image are built from it.
 - `validate(input)`: returns the parameters that decide the image, or throws `BadRequest`.
 - `render(params)`: returns a `Buffer`. Throw `UpstreamError` if something it depends on fails.
+- `maxBodyBytes` (optional): set it to take uploads. The body can be that big and can be `multipart/form-data`, with file parts passed to `validate` as `Buffer`s. A `Buffer` in the parameters counts towards the image id by its SHA-256.
 
 Then register it in `src/server.js`. See `src/generators/awyiss.js`.
 
 ## Fetching images
 
-`mustache` and `santa` download the image at the URL they're given, so silly refuses anything that could reach an internal service:
+`mustache`, `santa` and `rrif` download the image at the URL they're given, so silly refuses anything that could reach an internal service:
 
 - **Allowed:** http and https only. Every connection's address is checked after DNS resolution, and redirects (at most 3) are checked the same way. So neither a hostname nor a redirect can lead to a private, loopback, link-local or IPv6 unique-local address.
-- **Size and format:** images are limited to 10 MB and 16 megapixels, and must be a raster format. SVGs are refused because they can reference other files.
+- **Size and format:** images are limited to 10 MB and 16 megapixels, and must be a raster format. SVGs are refused because they can reference other files. Uploaded images are checked the same way.
+- **Uploads:** at most 4 upload bodies are read at once, with 8 more waiting; past that, a 503.
 
 ## Storage and expiry
 

@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
 import { BadRequest } from '../app.js';
+import { clean } from '../text.js';
 
 const ASSETS = new URL('../../assets/', import.meta.url);
 GlobalFonts.registerFromPath(new URL('fonts/EBGaramond.ttf', ASSETS).pathname, 'Silly Garamond');
@@ -73,16 +74,6 @@ const textWidth = (text, font) => {
   measure.font = font;
   return measure.measureText(text).width;
 };
-
-// Keep what the fonts can draw (Latin, Greek, Cyrillic and common
-// punctuation), like the original, which dropped characters its fonts lacked.
-const DRAWABLE = /[ -~ -ɏͰ-ϿЀ-ӿ‐-‧‰-⁞€]/u;
-const clean = text =>
-  [...text]
-    .filter(c => DRAWABLE.test(c))
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 // The biggest title font that fits: one line from 80px down to 62px, else two
 // lines (split at a space) from 80px down to 35px. Null if nothing fits.
